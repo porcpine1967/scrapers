@@ -5,4 +5,4 @@ I wrote these scripts to run on cron so I could get urls for comics and podcast 
 
 ## Setup
 
-Get a mysql database running. Create a database called 'aliddet7_comics'. Put the credentials for the database in a .my.cnf file at ~.  Run any of the scripts!
+Get a mysql database running. Create a database called 'aliddet7_comics'. Put the credentials for the database in a .my.cnf file at ~.  Source schema.sql into that database. Run any of the scripts!
