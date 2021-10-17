@@ -22,10 +22,10 @@ Clean up obvious problems in clean:
 
 Save first ~300 lines to file named "test"
  Add paragraph tags to test
- raw2ebook.py test
+ test.py test
 
 Add paragraph tags to new book.html
- raw2ebook.py add -max (number from above)
+ test.py add -max (number from above)
 
 
 Put this at the head of book.html. Update TITLE and AUTHOR
@@ -46,7 +46,7 @@ p.author{text-indent:0;margin-top:1em;page-break-after:always;}
 Make all chapter headings <h2>...</h2>
 
 Get first sentence of every paragraph
- raw2ebook.py firsts
+ test.py firsts
 
 Start adding missed paragraph tags and removing wrongly-added tags
 * turn off electric-indent-mode
@@ -55,13 +55,14 @@ Start adding missed paragraph tags and removing wrongly-added tags
 ** On break, if not in "firsts" file, add new line with first few words to firsts file
 ** If line in firsts not a break, remove <p> tag from book.html and remove line from firsts
 ** If section break, add new line to firsts with nbsp
-* Periodically run raw2ebook.py check to make sure everything is in sync
-* When bored run raw2ebook.py update followed by raw2ebook.py verify to move changes into book.html. Revove all executed lines from firsts
+* Periodically run test.py check to make sure everything is in sync
+* When bored run test.py update followed by test.py verify to move changes into book.html. Revove all executed lines from firsts
 
 Fix up hyphenated words, add ellipses, re-run aspell, etc
 """
 
 from argparse import ArgumentParser
+from collections import Counter
 import os
 
 CAPITALS = (
@@ -113,7 +114,7 @@ class Line:
 
 def find_max_length():
     """ Determine max length of guessed new paragraph"""
-    not_last_lines = []
+    lengths = Counter()
     last_line = None
     with open("test") as f:
         for l in f:
@@ -121,9 +122,12 @@ def find_max_length():
                 last_line = None
                 continue
             if last_line:
-                not_last_lines.append(len(last_line))
+                lengths[len(last_line)] += 1
             last_line = l.strip()
-    print(min(not_last_lines))
+    for idx, k in enumerate(lengths):
+        if idx > 5:
+            break
+        print(k, lengths[k])
 
 
 def add_lines(max_length):
