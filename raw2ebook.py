@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 """ Analyzes text for paragraph breaks.
 This script is for turning line/ocr text into html for later
-conversiont into an ebook.
+conversion into an ebook.
 
 Process:
 Put text into duplicate files named "raw" and "clean"
+> pdftotext x.pdf raw
 Clean up obvious problems in clean:
 * Remove line numbers, headers, and footers
 * Look for odd characters and make sure they are supposed to be there
