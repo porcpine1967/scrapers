@@ -15,7 +15,7 @@ Clean up obvious problems in clean:
 * Check all numbers
 * Check all isolated letters except a, A, and I
 * Spell check file (with -l [lang] if not en-US)
-** create file named custom.dict with header: personal_ws-1.1 en 1
+** create file named custom.dict with header: personal_ws-1.1 en 1 utf-8
 ** cat clean | aspell list | sort -u >> custom.dict
 ** Remove any words that might be misspelled
 ** aspell check clean --add-extra-dicts=./custom.dict

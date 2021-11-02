@@ -59,22 +59,28 @@ Update the xml with config values
 
 From the analysis, determine the values for the following
 configuration items:
+
 top_margin: If the pages have headers, chop them off by putting
-them above this line
+            them above this line
 bottom_margin: If the pages have footers, chop them off by putting
-them below this line
+               them below this line
 para_break: If paragraphs are indicated by space, this is the amount of
-difference between the tops of consecutive lines that imply a new
-paragraph should start.
-If paragraphs are indicated by indentation, this is the breakoff
-point after which the beginning of a line indicates a new paragraph
+              difference between the tops of consecutive lines that imply a new
+              paragraph should start.
+            If paragraphs are indicated by indentation, this is the breakoff
+              point after which the beginning of a line indicates a new paragraph
 buf: For Composite Lines (when a logical line of text is broken into
-separate xml nodes for formatting reasons), the 'top' of the line of these 
-elements do not always match. If so, indicate a 'buf' element such that
-any top within this distance of each other should be considered the same
-logical line.
+     separate xml nodes for formatting reasons), the 'top' of the line of these 
+     elements do not always match. If so, indicate a 'buf' element such that
+     any top within this distance of each other should be considered the same
+     logical line.
 default_font: The index of the font of the bulk of the text
+
 chapter_font: The index of the font of chapter headings
+
+strategy: for para_break, differentiate vertical, spaces, or indent
+
+chapter_numbers: add chapter numbers after chapter titles
 
 Add a "title" tag for the name of the file and the title of the html
 Add an "author" tag for the name of the author
@@ -83,6 +89,32 @@ SAMPLE:
 <config top_margin="0" bottom_margin="10000" para_break="30" buf="5" default_font="0" />
 <title>Jonathan Strange and Mr. Norrell</title>
 <author>Susanna Clarke</author>
+
+Step 4:
+Manipulate the xml for better parsing by adding tags:
+
+<footnote top="x"/>
+This tells the parser that everything at X and greater are footnotes
+(currently ignores)
+
+ignore=true
+Attribute of page that tells parser to ignore
+
+First back up the xml!
+
+Remove Footnotes:
+Find the font used for footnotes only
+For each page, find first instance of footnote
+Add "footnote" tag with top same as  footnote
+
+Find odd fonts:
+
+
+Odd characters:
+** egrep -o "[^a-zA-Z0-9.,?;:()'\" -]" <book.xml> | sort -u
+
+
+Bad spacing:
 """
 from argparse import ArgumentParser
 import codecs
@@ -93,6 +125,7 @@ from xml.dom.minidom import parse
 
 SENTENCE_END = re.compile(u"[.?!](['\"\u201d\xbb]|\&quot;)?\s*$")
 STARTS_WITH_CAP = re.compile(u"^(['\"\xab\u201c]|\&quot;)?[A-Z]")
+LINK_TAG = re.compile(r"</?a\b[^>]*>")
 
 
 class PDFDoc(object):
@@ -107,26 +140,28 @@ class PDFDoc(object):
         self.title = text_value(self.doc, "title") or ""
         self.html_file = u"{}.html".format(self.title.lower().replace(u" ", u"_"))
         self.author = text_value(self.doc, "author")
-        try:
-            config = self.doc.getElementsByTagName("config")[0]
+        self.top_margin = 0
+        self.bottom_margin = 0
+        self.para_break = 0
+        self.buf = 0
+        self.default_font = None
+        self.chapter_font = None
+        self.strategy = "vertical"
+        for config in self.doc.getElementsByTagName("config"):
             self.top_margin = int(config.getAttribute("top_margin"))
             self.bottom_margin = int(config.getAttribute("bottom_margin"))
             self.para_break = int(config.getAttribute("para_break"))
             self.buf = int(config.getAttribute("buf"))
             self.default_font = config.getAttribute("default_font")
             self.chapter_font = config.getAttribute("chapter_font")
-        except:
-            self.top_margin = 0
-            self.bottom_margin = 0
-            self.para_break = 0
-            self.buf = 0
-            self.default_font = None
-            self.chapter_font = None
-
+            self.strategy = config.getAttribute("strategy") or "vertical"
+            if config.getAttribute("chapter_numbers") == "false":
+                Line.USE_CHAPTER_NUMBERS = False
+            break
         default_font_size = 1.0
         for fontspec in self.doc.getElementsByTagName("fontspec"):
             font = Font(fontspec)
-            if font.index == self.default_font:
+            if not self.default_font or font.index == self.default_font:
                 font.default = True
                 default_font_size = float(font.size_pt)
             if font.index == self.chapter_font:
@@ -140,9 +175,10 @@ class PDFDoc(object):
         for page in self.doc.getElementsByTagName("page"):
             p = Page(page, self.fonts, self.top_margin, self.bottom_margin, self.buf)
             p.parse()
-            self.pages[p.number] = p
+            if not p.ignore:
+                self.pages[p.number] = p
 
-    def write_html(self, strategy):
+    def write_html(self):
         """ HTML representation of the doc, written to path."""
         print "writing", self.html_file
         with codecs.open(self.html_file, mode="wb", encoding="utf-8") as f:
@@ -152,7 +188,7 @@ class PDFDoc(object):
                 last_top = 0
                 f.write("<!-- Page {} -->\n".format(page.number))
                 for line in sorted(page.lines.values(), key=lambda x: x.top):
-                    if strategy == "vertical":
+                    if self.strategy == "vertical":
                         line_diff = line.top - last_top
                         if last_top != 0:
                             if line_diff > (2 * self.para_break):
@@ -165,10 +201,10 @@ class PDFDoc(object):
                             and line.begins_sentence
                         ):
                             f.write("<p>\n")
-                    elif strategy == "spaces":
+                    elif self.strategy == "spaces":
                         if line.text.startswith("      "):
                             f.write("<p>\n")
-                    elif strategy == "indent":
+                    elif self.strategy == "indent":
                         if line.left > self.para_break:
                             f.write("<p>\n")
                     f.write(line.html_text)
@@ -197,14 +233,15 @@ class PDFDoc(object):
     @property
     def css(self):
         css_text = '<style type="text/css">\n'
-        for font in self.fonts.values():
-            if font.default:
-                css_text += "body {{{}}}\n".format(font.css_style)
-            elif font.chapter:
-                css_text += "h2 {{{}}}\n".format(font.css_style)
-                css_text += ".{} {{{}}}\n".format(font.css_class, font.css_style)
-            else:
-                css_text += ".{} {{{}}}\n".format(font.css_class, font.css_style)
+        if self.default_font:
+            for font in self.fonts.values():
+                if font.default:
+                    css_text += "body {{{}}}\n".format(font.css_style)
+                elif font.chapter:
+                    css_text += "h2 {{{}}}\n".format(font.css_style)
+                    css_text += ".{} {{{}}}\n".format(font.css_class, font.css_style)
+                else:
+                    css_text += ".{} {{{}}}\n".format(font.css_class, font.css_style)
         css_text += "p{text-indent:1.5em;margin:0}\n"
         css_text += "p.section{text-indent:0;margin-top:1em}\n"
         css_text += "p.author{text-indent:0;margin-top:1em;page-break-after:always;}\n"
@@ -260,11 +297,10 @@ class PDFDoc(object):
         for k in sorted(max_length.keys()):
             print "{:>4}: {:>4}".format(k, max_length[k])
 
-        for k, v in left_ctr.most_common():
-            if 50 < k < 100:
-                print u"left: {:>4}  count: {:>4}  example: {}".format(
-                    k, v, left_examples[k]
-                )
+        for k, v in left_ctr.most_common(18):
+            print u"left: {:>4}  count: {:>4}  example: {}".format(
+                k, v, left_examples[k]
+            )
         for k, v in font_ctr.most_common():
             print u"font {:>8}: {:>7} {}".format(
                 k.css_class, v, font_examples[k.css_class]
@@ -288,6 +324,7 @@ class Page(object):
         self.top_margin = top_margin
         self.bottom_margin = bottom_margin
         self.buf = buf
+        self.ignore = self.node.getAttribute("ignore") == "true"
 
     def parse(self):
         """ Sets the number, height, and width attributes.
@@ -296,12 +333,15 @@ class Page(object):
         self.height = int(self.node.getAttribute("height"))
         self.width = int(self.node.getAttribute("width"))
         self.lines = {}
+        bottom_margin = self.bottom_margin
+        for footnote in self.node.getElementsByTagName("footnote"):
+            bottom_margin = int(footnote.getAttribute("top")) - 1
         for n in self.node.getElementsByTagName("text"):
             line = Line(n, self.fonts)
             if (
                 not line.text.strip()
                 or line.top < self.top_margin
-                or line.top > self.bottom_margin
+                or line.top > bottom_margin
             ):
                 continue
             found = False
@@ -388,6 +428,7 @@ class CompositeLine(object):
 
 
 class Line(object):
+    USE_CHAPTER_NUMBERS = True
     CHAPTER_NUMBER = 0
 
     def __init__(self, line, fonts):
@@ -403,15 +444,18 @@ class Line(object):
             except:
                 print "exception"
                 pass
+        self.text = re.sub(LINK_TAG, "", self.text)
 
     @property
     def html_text(self):
-        if self.font.default:
-            return self.text
-        elif self.font.chapter:
+        if self.font.chapter:
             Line.CHAPTER_NUMBER += 1
-            return u"<h2>{} {}</h2>".format(self.text, Line.CHAPTER_NUMBER)
-
+            if Line.USE_CHAPTER_NUMBERS:
+                return u"<h2>{} {}</h2>".format(self.text, Line.CHAPTER_NUMBER)
+            else:
+                return u"<h2>{}</h2>".format(self.text)
+        elif self.font.default:
+            return self.text
         else:
             return u'<span class="{}">{}</span>'.format(self.font.css_class, self.text)
 
@@ -435,10 +479,10 @@ def analyze(path):
     doc.analyze()
 
 
-def write_html(path, strategy):
+def write_html(path):
     doc = PDFDoc(path)
     doc.parse()
-    doc.write_html(strategy)
+    doc.write_html()
 
 
 if __name__ == "__main__":
@@ -450,15 +494,9 @@ if __name__ == "__main__":
         default="a",
         help='"a" for analyze, anything else for write',
     )
-    parser.add_argument(
-        "-strategy",
-        type=str,
-        default="vertical",
-        help='"vertical", "spaces", or "indent" para breaks',
-    )
     args = parser.parse_args()
 
     if args.action == "a":
         analyze(args.file_path)
     else:
-        write_html(args.file_path, args.strategy)
+        write_html(args.file_path)
