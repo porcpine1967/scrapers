@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 """
 This program takes xml generated from a text-based pdf
 and turns it into html for generation into an ebook by Calibre
@@ -180,7 +180,7 @@ class PDFDoc(object):
 
     def write_html(self):
         """ HTML representation of the doc, written to path."""
-        print "writing", self.html_file
+        print("writing", self.html_file)
         with codecs.open(self.html_file, mode="wb", encoding="utf-8") as f:
             f.write(self.header)
             last_line = None
@@ -291,20 +291,20 @@ class PDFDoc(object):
                     hold_line = line
 
         for k, v in height_diff_ctr.most_common(10):
-            print u"diff: {:>4}  count: {:>4}  example: {}".format(
+            print(u"diff: {:>4}  count: {:>4}  example: {}".format(
                 k, v, diff_examples[k]
-            )
+            ))
         for k in sorted(max_length.keys()):
-            print "{:>4}: {:>4}".format(k, max_length[k])
+            print("{:>4}: {:>4}".format(k, max_length[k]))
 
         for k, v in left_ctr.most_common(18):
-            print u"left: {:>4}  count: {:>4}  example: {}".format(
+            print(u"left: {:>4}  count: {:>4}  example: {}".format(
                 k, v, left_examples[k]
-            )
+            ))
         for k, v in font_ctr.most_common():
-            print u"font {:>8}: {:>7} {}".format(
+            print(u"font {:>8}: {:>7} {}".format(
                 k.css_class, v, font_examples[k.css_class]
-            )
+            ))
 
 
 class Page(object):
@@ -345,7 +345,7 @@ class Page(object):
             ):
                 continue
             found = False
-            for i in xrange(2 * self.buf):
+            for i in range(2 * self.buf):
                 key = line.top - self.buf + i
                 if key in self.lines.keys():
                     found = True
@@ -442,7 +442,7 @@ class Line(object):
             try:
                 self.text += c.toxml()
             except:
-                print "exception"
+                print("exception")
                 pass
         self.text = re.sub(LINK_TAG, "", self.text)
 
